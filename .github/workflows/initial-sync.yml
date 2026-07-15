@@ -1,0 +1,62 @@
+name: Apps Script 최초 가져오기
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: 저장소 체크아웃
+        uses: actions/checkout@v4
+
+      - name: Node.js 설정
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: clasp 설치
+        run: npm install --global @google/clasp
+
+      - name: clasp 인증 파일 생성
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+        run: |
+          test -n "$CLASPRC_JSON" || (echo "CLASPRC_JSON secret이 없습니다." && exit 1)
+          printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
+          chmod 600 "$HOME/.clasprc.json"
+
+      - name: Apps Script 프로젝트 연결
+        env:
+          APPS_SCRIPT_ID: ${{ secrets.APPS_SCRIPT_ID }}
+        run: |
+          test -n "$APPS_SCRIPT_ID" || (echo "APPS_SCRIPT_ID secret이 없습니다." && exit 1)
+          printf '{"scriptId":"%s","rootDir":"src"}\n' "$APPS_SCRIPT_ID" > .clasp.json
+          rm -rf src
+          mkdir -p src
+
+      - name: 현재 Apps Script 코드 가져오기
+        run: clasp pull
+
+      - name: 가져온 파일 확인
+        run: |
+          test -f src/Code.gs || (echo "src/Code.gs를 가져오지 못했습니다." && exit 1)
+          test -f src/index.html || (echo "src/index.html을 가져오지 못했습니다." && exit 1)
+          test -f src/appsscript.json || (echo "src/appsscript.json을 가져오지 못했습니다." && exit 1)
+
+      - name: GitHub에 현재 코드 저장
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src
+          if git diff --cached --quiet; then
+            echo "변경된 코드가 없습니다."
+          else
+            git commit -m "chore: 현재 Apps Script 원본 동기화"
+            git push
+          fi
