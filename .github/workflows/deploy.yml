@@ -29,7 +29,7 @@ jobs:
       - name: Node.js 설정
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
 
       - name: 소스 구문 검사
         run: node scripts/validate.mjs
@@ -55,18 +55,11 @@ jobs:
       - name: Apps Script 코드 업로드
         run: clasp push --force
 
-      - name: 배포 설명 생성
-        id: meta
-        run: echo "description=GitHub-${GITHUB_SHA::7}-$(date -u +%Y%m%d-%H%M%S)" >> "$GITHUB_OUTPUT"
-
       - name: 기존 웹앱 새 버전 배포
         env:
           APPS_SCRIPT_DEPLOYMENT_ID: ${{ secrets.APPS_SCRIPT_DEPLOYMENT_ID }}
-          DEPLOY_DESCRIPTION: ${{ steps.meta.outputs.description }}
         run: |
           test -n "$APPS_SCRIPT_DEPLOYMENT_ID" || (echo "APPS_SCRIPT_DEPLOYMENT_ID secret이 없습니다." && exit 1)
-          clasp create-version "$DEPLOY_DESCRIPTION"
-          VERSION=$(clasp versions | tail -n 1 | sed -E 's/^([0-9]+).*/\1/')
-          test -n "$VERSION" || (echo "새 Apps Script 버전을 확인할 수 없습니다." && exit 1)
-          clasp update-deployment "$APPS_SCRIPT_DEPLOYMENT_ID" -V "$VERSION" -d "$DEPLOY_DESCRIPTION"
-          echo "Apps Script 웹앱 배포 완료: version $VERSION"
+          DESCRIPTION="GitHub-${GITHUB_SHA::7}-$(date -u +%Y%m%d-%H%M%S)"
+          clasp update-deployment "$APPS_SCRIPT_DEPLOYMENT_ID" -d "$DESCRIPTION"
+          echo "Apps Script 웹앱 배포 완료: $DESCRIPTION"
